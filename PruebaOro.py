@@ -71,14 +71,15 @@ def main(page: ft.Page):
             page.update()
 
     # --- PANELES ---
+    # Corrección aquí: ft.Icon("nombre") en lugar de ft.Icon(name="nombre")
     panel_vivo = ft.Column([
         ft.Text("PRECIO 1g PURO (24K)", size=22, weight="bold"),
         ft.Divider(height=20, color="transparent"),
-        ft.Icon(name="stars", color="amber", size=30),
+        ft.Icon("stars", color="amber", size=30),
         ft.Text("ORO", color="amber", size=16), 
         txt_oro_v,
         ft.Divider(height=10, color="transparent"),
-        ft.Icon(name="monetization_on", color="bluegrey", size=30),
+        ft.Icon("monetization_on", color="bluegrey", size=30),
         ft.Text("PLATA", color="bluegrey", size=16), 
         txt_plata_v,
         ft.Divider(height=20, color="transparent"),
@@ -103,7 +104,7 @@ def main(page: ft.Page):
             panel_vivo.visible, panel_kila.visible = False, True
         page.update()
 
-    page.navigation_bar = ft.NavigationBar(
+    page.navigation_bar = ft.Navigation_bar(
         destinations=[
             ft.NavigationDestination(icon="analytics", label="En Vivo"),
             ft.NavigationDestination(icon="list_alt", label="Kilataje"),
