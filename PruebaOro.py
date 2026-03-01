@@ -2,7 +2,7 @@ import flet as ft
 import requests
 
 def main(page: ft.Page):
-    page.title = "Joyero Pro: Cotizador de Metales"
+    page.title = "Joyero Pro: Cotizador"
     page.theme_mode = ft.ThemeMode.DARK
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.scroll = ft.ScrollMode.AUTO
@@ -25,7 +25,7 @@ def main(page: ft.Page):
     col_kila_oro = ft.Column(horizontal_alignment="center", spacing=5)
     col_kila_plata = ft.Column(horizontal_alignment="center", spacing=5)
     
-    txt_status = ft.Text("Actualizando precios...", size=12, italic=True)
+    txt_status = ft.Text("Actualizando...", size=12, italic=True)
 
     def obtener_datos(e=None):
         txt_status.value = "Consultando mercado..."
@@ -56,69 +56,61 @@ def main(page: ft.Page):
                     
                     col.controls.append(
                         ft.Container(
-                            content=ft.Text(f"{nombre}: {valor}", size=18, color=color_txt, weight="w500"),
-                            padding=8,
-                            bgcolor="white10",
-                            border_radius=10,
-                            width=280,
+                            content=ft.Text(f"{nombre}: {valor}", size=18, color=color_txt),
+                            padding=8, bgcolor="white10", border_radius=10, width=280,
                             alignment=ft.alignment.center
                         )
                     )
-                
                 txt_status.value = f"Sincronizado: {data['date']}"
             page.update()
         except Exception:
-            txt_status.value = "Sin conexión: Reintenta en un momento"
+            txt_status.value = "Error de conexión"
             page.update()
 
     # --- PANELES ---
     panel_vivo = ft.Column([
-        ft.Text("PRECIO 1g PURO (24K)", size=22, weight="bold"),
         ft.Divider(height=20, color="transparent"),
         ft.Icon("stars", color="amber", size=40),
-        ft.Text("ORO", color="amber", size=16), 
+        ft.Text("ORO 24K (g)", color="amber"), 
         txt_oro_v,
         ft.Divider(height=10, color="transparent"),
         ft.Icon("monetization_on", color="bluegrey", size=40),
-        ft.Text("PLATA", color="bluegrey", size=16), 
+        ft.Text("PLATA PURA (g)", color="bluegrey"), 
         txt_plata_v,
         ft.Divider(height=30, color="transparent"),
-        ft.ElevatedButton(
-            "ACTUALIZAR PRECIOS", 
-            icon="refresh", 
-            on_click=obtener_datos
-        ),
-    ], horizontal_alignment="center", visible=True)
+        ft.ElevatedButton("ACTUALIZAR", icon="refresh", on_click=obtener_datos),
+    ], horizontal_alignment="center")
 
     panel_kila = ft.Column([
-        ft.Text("VALOR POR LEY", size=22, weight="bold"),
-        ft.Divider(),
         ft.Text("ORO", color="amber", weight="bold", size=18),
         col_kila_oro,
-        ft.Divider(height=20, color="transparent"),
+        ft.Divider(height=20),
         ft.Text("PLATA", color="bluegrey", weight="bold", size=18),
         col_kila_plata,
-    ], horizontal_alignment="center", visible=False)
+    ], horizontal_alignment="center")
 
+    # --- NAVEGACIÓN COMPATIBLE (TABS) ---
     def cambiar_tab(e):
-        idx = int(e.data)
-        if idx == 0:
-            panel_vivo.visible, panel_kila.visible = True, False
-        else:
-            panel_vivo.visible, panel_kila.visible = False, True
+        idx = e.control.selected_index
+        panel_vivo.visible = (idx == 0)
+        panel_kila.visible = (idx == 1)
         page.update()
 
-    # --- SOLUCIÓN AL ERROR DE NAVIGATION ---
-    # Usamos ft.NavigationBar con sus destinos corregidos
-    page.navigation_bar = ft.NavigationBar(
-        destinations=[
-            ft.NavigationDestination(icon="analytics", label="Precios"),
-            ft.NavigationDestination(icon="format_list_bulleted", label="Leyes"),
-        ],
+    # Usamos Tabs en lugar de NavigationBar para máxima compatibilidad
+    tabs = ft.Tabs(
+        selected_index=0,
         on_change=cambiar_tab,
+        tabs=[
+            ft.Tab(text="EN VIVO", icon="analytics"),
+            ft.Tab(text="LEYES", icon="format_list_bulleted"),
+        ],
     )
 
+    # Inicializar visibilidad
+    panel_kila.visible = False
+
     page.add(
+        tabs,
         ft.Container(
             content=ft.Column([
                 panel_vivo,
