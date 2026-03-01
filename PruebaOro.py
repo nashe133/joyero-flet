@@ -8,6 +8,7 @@ def main(page: ft.Page):
     page.scroll = ft.ScrollMode.AUTO
     page.padding = 20
 
+    # Configuración técnica
     ONZA_A_GRAMO = 31.1035
     precios_gramo = {"oro": 0, "plata": 0}
     
@@ -30,23 +31,27 @@ def main(page: ft.Page):
         txt_status.value = "Consultando mercado..."
         page.update()
         try:
+            # URL de GoldPrice para CLP (Pesos Chilenos)
             url = "https://data-asg.goldprice.org/dbXRates/CLP"
             headers = {'User-Agent': 'okhttp/4.12.0'}
-            response = requests.get(url, headers=headers, timeout=10)
+            response = requests.get(url, headers=headers, timeout=15)
             
             if response.status_code == 200:
                 data = response.json()
                 item = data['items'][0]
                 
+                # Cálculos
                 precios_gramo["oro"] = item['xauPrice'] / ONZA_A_GRAMO
                 precios_gramo["plata"] = item['xagPrice'] / ONZA_A_GRAMO
 
+                # Formateo de precios principales
                 txt_oro_v.value = f"$ {int(precios_gramo['oro']):,}".replace(",", ".")
                 txt_plata_v.value = f"$ {int(precios_gramo['plata']):,}".replace(",", ".")
                 
                 col_kila_oro.controls.clear()
                 col_kila_plata.controls.clear()
                 
+                # Generar lista de kilataje
                 for nombre, mult in leyes.items():
                     base = precios_gramo["oro"] if "Oro" in nombre else precios_gramo["plata"]
                     valor = f"$ {int(base * mult):,}".replace(",", ".")
@@ -56,47 +61,51 @@ def main(page: ft.Page):
                     col.controls.append(
                         ft.Container(
                             content=ft.Text(f"{nombre}: {valor}", size=18, color=color_txt, weight="w500"),
-                            padding=5,
+                            padding=8,
                             bgcolor="white10",
-                            border_radius=8,
-                            width=250,
+                            border_radius=10,
+                            width=280,
                             alignment=ft.alignment.center
                         )
                     )
                 
-                txt_status.value = f"Última actualización: {data['date']}"
+                txt_status.value = f"Sincronizado: {data['date']}"
             page.update()
         except Exception as ex:
-            txt_status.value = f"Error de conexión: {str(ex)}"
+            txt_status.value = f"Sin conexión: Reintenta en un momento"
             page.update()
 
-    # --- PANELES ---
-    # Corrección aquí: ft.Icon("nombre") en lugar de ft.Icon(name="nombre")
+    # --- PANELES DE NAVEGACIÓN ---
     panel_vivo = ft.Column([
         ft.Text("PRECIO 1g PURO (24K)", size=22, weight="bold"),
         ft.Divider(height=20, color="transparent"),
-        ft.Icon("stars", color="amber", size=30),
+        ft.Icon("stars", color="amber", size=40),
         ft.Text("ORO", color="amber", size=16), 
         txt_oro_v,
         ft.Divider(height=10, color="transparent"),
-        ft.Icon("monetization_on", color="bluegrey", size=30),
+        ft.Icon("monetization_on", color="bluegrey", size=40),
         ft.Text("PLATA", color="bluegrey", size=16), 
         txt_plata_v,
-        ft.Divider(height=20, color="transparent"),
-        ft.ElevatedButton("ACTUALIZAR AHORA", icon="refresh", on_click=obtener_datos),
+        ft.Divider(height=30, color="transparent"),
+        ft.ElevatedButton(
+            "ACTUALIZAR PRECIOS", 
+            icon="refresh", 
+            on_click=obtener_datos,
+            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10))
+        ),
     ], horizontal_alignment="center", visible=True)
 
     panel_kila = ft.Column([
         ft.Text("VALOR POR LEY", size=22, weight="bold"),
         ft.Divider(),
-        ft.Text("ORO", color="amber", weight="bold"),
+        ft.Text("ORO", color="amber", weight="bold", size=18),
         col_kila_oro,
-        ft.Divider(height=20),
-        ft.Text("PLATA", color="bluegrey", weight="bold"),
+        ft.Divider(height=20, color="transparent"),
+        ft.Text("PLATA", color="bluegrey", weight="bold", size=18),
         col_kila_plata,
     ], horizontal_alignment="center", visible=False)
 
-    # NAVEGACIÓN
+    # Lógica de cambio de pestaña
     def cambiar_tab(e):
         if e.control.selected_index == 0:
             panel_vivo.visible, panel_kila.visible = True, False
@@ -104,14 +113,17 @@ def main(page: ft.Page):
             panel_vivo.visible, panel_kila.visible = False, True
         page.update()
 
-    page.navigation_bar = ft.Navigation_bar(
+    # Barra de Navegación Inferior (Corregida: NavigationBar)
+    page.navigation_bar = ft.NavigationBar(
         destinations=[
-            ft.NavigationDestination(icon="analytics", label="En Vivo"),
-            ft.NavigationDestination(icon="list_alt", label="Kilataje"),
+            ft.NavigationDestination(icon="analytics", label="Precios Oro"),
+            ft.NavigationDestination(icon="format_list_bulleted", label="Kilataje"),
         ],
         on_change=cambiar_tab,
+        bgcolor="surfaceVariant"
     )
 
+    # Construcción de la página
     page.add(
         ft.Container(
             content=ft.Column([
@@ -120,10 +132,12 @@ def main(page: ft.Page):
                 ft.Divider(height=30, color="transparent"),
                 txt_status
             ], horizontal_alignment="center"),
-            padding=10
+            padding=15
         )
     )
     
+    # Carga inicial
     obtener_datos()
 
+# Ejecución de la app
 ft.app(target=main)
