@@ -31,7 +31,6 @@ def main(page: ft.Page):
         txt_status.value = "Consultando mercado..."
         page.update()
         try:
-            # URL de GoldPrice para CLP (Pesos Chilenos)
             url = "https://data-asg.goldprice.org/dbXRates/CLP"
             headers = {'User-Agent': 'okhttp/4.12.0'}
             response = requests.get(url, headers=headers, timeout=15)
@@ -40,18 +39,15 @@ def main(page: ft.Page):
                 data = response.json()
                 item = data['items'][0]
                 
-                # Cálculos
                 precios_gramo["oro"] = item['xauPrice'] / ONZA_A_GRAMO
                 precios_gramo["plata"] = item['xagPrice'] / ONZA_A_GRAMO
 
-                # Formateo de precios principales
                 txt_oro_v.value = f"$ {int(precios_gramo['oro']):,}".replace(",", ".")
                 txt_plata_v.value = f"$ {int(precios_gramo['plata']):,}".replace(",", ".")
                 
                 col_kila_oro.controls.clear()
                 col_kila_plata.controls.clear()
                 
-                # Generar lista de kilataje
                 for nombre, mult in leyes.items():
                     base = precios_gramo["oro"] if "Oro" in nombre else precios_gramo["plata"]
                     valor = f"$ {int(base * mult):,}".replace(",", ".")
@@ -71,11 +67,11 @@ def main(page: ft.Page):
                 
                 txt_status.value = f"Sincronizado: {data['date']}"
             page.update()
-        except Exception as ex:
-            txt_status.value = f"Sin conexión: Reintenta en un momento"
+        except Exception:
+            txt_status.value = "Sin conexión: Reintenta en un momento"
             page.update()
 
-    # --- PANELES DE NAVEGACIÓN ---
+    # --- PANELES ---
     panel_vivo = ft.Column([
         ft.Text("PRECIO 1g PURO (24K)", size=22, weight="bold"),
         ft.Divider(height=20, color="transparent"),
@@ -90,8 +86,7 @@ def main(page: ft.Page):
         ft.ElevatedButton(
             "ACTUALIZAR PRECIOS", 
             icon="refresh", 
-            on_click=obtener_datos,
-            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10))
+            on_click=obtener_datos
         ),
     ], horizontal_alignment="center", visible=True)
 
@@ -105,25 +100,24 @@ def main(page: ft.Page):
         col_kila_plata,
     ], horizontal_alignment="center", visible=False)
 
-    # Lógica de cambio de pestaña
     def cambiar_tab(e):
-        if e.control.selected_index == 0:
+        idx = int(e.data)
+        if idx == 0:
             panel_vivo.visible, panel_kila.visible = True, False
         else:
             panel_vivo.visible, panel_kila.visible = False, True
         page.update()
 
-    # Barra de Navegación Inferior (Corregida: NavigationBar)
+    # --- SOLUCIÓN AL ERROR DE NAVIGATION ---
+    # Usamos ft.NavigationBar con sus destinos corregidos
     page.navigation_bar = ft.NavigationBar(
         destinations=[
-            ft.NavigationDestination(icon="analytics", label="Precios Oro"),
-            ft.NavigationDestination(icon="format_list_bulleted", label="Kilataje"),
+            ft.NavigationDestination(icon="analytics", label="Precios"),
+            ft.NavigationDestination(icon="format_list_bulleted", label="Leyes"),
         ],
         on_change=cambiar_tab,
-        bgcolor="surfaceVariant"
     )
 
-    # Construcción de la página
     page.add(
         ft.Container(
             content=ft.Column([
@@ -136,8 +130,6 @@ def main(page: ft.Page):
         )
     )
     
-    # Carga inicial
     obtener_datos()
 
-# Ejecución de la app
 ft.app(target=main)
