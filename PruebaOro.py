@@ -2,13 +2,11 @@ import flet as ft
 import requests
 
 def main(page: ft.Page):
-    page.title = "Joyero Pro: Cotizador"
-    page.theme_mode = ft.ThemeMode.DARK
-    page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-    page.scroll = ft.ScrollMode.AUTO
-    page.padding = 20
+    page.title = "Joyero Pro"
+    page.theme_mode = "dark"
+    page.horizontal_alignment = "center"
+    page.scroll = "auto"
 
-    # Configuración técnica
     ONZA_A_GRAMO = 31.1035
     precios_gramo = {"oro": 0, "plata": 0}
     
@@ -19,16 +17,16 @@ def main(page: ft.Page):
     }
 
     # --- ELEMENTOS DE INTERFAZ ---
-    txt_oro_v = ft.Text("$ 0", size=45, weight="bold", color="amber")
-    txt_plata_v = ft.Text("$ 0", size=45, weight="bold", color="bluegrey")
+    txt_oro_v = ft.Text("$ 0", size=40, weight="bold", color="amber")
+    txt_plata_v = ft.Text("$ 0", size=40, weight="bold", color="bluegrey")
     
-    col_kila_oro = ft.Column(horizontal_alignment="center", spacing=5)
-    col_kila_plata = ft.Column(horizontal_alignment="center", spacing=5)
+    col_kila_oro = ft.Column(horizontal_alignment="center")
+    col_kila_plata = ft.Column(horizontal_alignment="center")
     
-    txt_status = ft.Text("Actualizando...", size=12, italic=True)
+    txt_status = ft.Text("Cargando...", size=12)
 
     def obtener_datos(e=None):
-        txt_status.value = "Consultando mercado..."
+        txt_status.value = "Consultando..."
         page.update()
         try:
             url = "https://data-asg.goldprice.org/dbXRates/CLP"
@@ -52,74 +50,53 @@ def main(page: ft.Page):
                     base = precios_gramo["oro"] if "Oro" in nombre else precios_gramo["plata"]
                     valor = f"$ {int(base * mult):,}".replace(",", ".")
                     color_txt = "amber" if "Oro" in nombre else "bluegrey"
-                    col = col_kila_oro if "Oro" in nombre else col_kila_plata
                     
-                    col.controls.append(
-                        ft.Container(
-                            content=ft.Text(f"{nombre}: {valor}", size=18, color=color_txt),
-                            padding=8, bgcolor="white10", border_radius=10, width=280,
-                            alignment=ft.alignment.center
-                        )
-                    )
-                txt_status.value = f"Sincronizado: {data['date']}"
+                    col_kila_oro.controls.append(ft.Text(f"{nombre}: {valor}", color=color_txt)) if "Oro" in nombre else col_kila_plata.controls.append(ft.Text(f"{nombre}: {valor}", color=color_txt))
+                
+                txt_status.value = "Actualizado"
             page.update()
-        except Exception:
-            txt_status.value = "Error de conexión"
+        except:
+            txt_status.value = "Error de red"
             page.update()
 
     # --- PANELES ---
     panel_vivo = ft.Column([
-        ft.Divider(height=20, color="transparent"),
-        ft.Icon("stars", color="amber", size=40),
-        ft.Text("ORO 24K (g)", color="amber"), 
+        ft.Text("ORO 24K", color="amber"), 
         txt_oro_v,
-        ft.Divider(height=10, color="transparent"),
-        ft.Icon("monetization_on", color="bluegrey", size=40),
-        ft.Text("PLATA PURA (g)", color="bluegrey"), 
+        ft.Text("PLATA PURA", color="bluegrey"), 
         txt_plata_v,
-        ft.Divider(height=30, color="transparent"),
-        ft.ElevatedButton("ACTUALIZAR", icon="refresh", on_click=obtener_datos),
+        ft.ElevatedButton("ACTUALIZAR", on_click=obtener_datos),
     ], horizontal_alignment="center")
 
     panel_kila = ft.Column([
-        ft.Text("ORO", color="amber", weight="bold", size=18),
+        ft.Text("ORO", weight="bold"),
         col_kila_oro,
-        ft.Divider(height=20),
-        ft.Text("PLATA", color="bluegrey", weight="bold", size=18),
+        ft.Text("PLATA", weight="bold"),
         col_kila_plata,
-    ], horizontal_alignment="center")
+    ], horizontal_alignment="center", visible=False)
 
-    # --- NAVEGACIÓN COMPATIBLE (TABS) ---
+    # --- NAVEGACIÓN (Sintaxis ultra-compatible) ---
     def cambiar_tab(e):
         idx = e.control.selected_index
         panel_vivo.visible = (idx == 0)
         panel_kila.visible = (idx == 1)
         page.update()
 
-    # Usamos Tabs en lugar de NavigationBar para máxima compatibilidad
+    # Cambiado 'text' por 'label' para compatibilidad antigua
     tabs = ft.Tabs(
         selected_index=0,
         on_change=cambiar_tab,
         tabs=[
-            ft.Tab(text="EN VIVO", icon="analytics"),
-            ft.Tab(text="LEYES", icon="format_list_bulleted"),
+            ft.Tab(label="Precios"),
+            ft.Tab(label="Leyes"),
         ],
     )
 
-    # Inicializar visibilidad
-    panel_kila.visible = False
-
     page.add(
         tabs,
-        ft.Container(
-            content=ft.Column([
-                panel_vivo,
-                panel_kila,
-                ft.Divider(height=30, color="transparent"),
-                txt_status
-            ], horizontal_alignment="center"),
-            padding=15
-        )
+        panel_vivo,
+        panel_kila,
+        txt_status
     )
     
     obtener_datos()
