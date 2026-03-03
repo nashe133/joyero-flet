@@ -3,100 +3,107 @@ import requests
 import time
 
 def main(page: ft.Page):
-    page.title = "Joyero Pro"
+    page.title = "Joyero Pro - Gold API Edition"
     page.theme_mode = "dark"
     page.horizontal_alignment = "center"
     page.scroll = "auto"
+    page.padding = 20
 
     # --- CONFIGURACIÓN ---
+    # Por ahora en 1 para que veas el valor USD directo
+    VALOR_DOLAR = 1 
     ONZA_A_GRAMO = 31.1035
-    DOLAR_MANUAL = 965  # <--- Cambia este valor según el dólar del día
     
-    precios_base = {"oro": 0, "plata": 0}
-    
+    # Tus leyes originales
     leyes = {
         "Oro 22K": 0.9167, "Oro 21K": 0.900, "Oro 18K": 0.750, 
         "Oro 14K": 0.583, "Oro 10K": 0.4167, "Plata 980": 0.980, 
         "Plata 950": 0.950, "Plata 925": 0.925, "Plata 900": 0.900
     }
 
-    # --- UI ---
-    txt_oro_24 = ft.Text("$ 0", size=40, weight="bold", color="amber")
-    txt_plata_pura = ft.Text("$ 0", size=40, weight="bold", color="bluegrey")
+    # --- ELEMENTOS DE INTERFAZ ---
+    txt_oro_24 = ft.Text("USD 0", size=40, weight="bold", color="amber")
+    txt_plata_pura = ft.Text("USD 0", size=40, weight="bold", color="bluegrey")
+    
     col_oro = ft.Column(horizontal_alignment="center")
     col_plata = ft.Column(horizontal_alignment="center")
-    txt_status = ft.Text("Listo", size=12, italic=True)
+    
+    txt_status = ft.Text("Listo para consultar", size=12, italic=True)
 
-    def actualizar_interfaz():
-        if precios_base["oro"] == 0: return
-        
-        txt_oro_24.value = "$ " + "{:,}".format(int(precios_base["oro"])).replace(",", ".")
-        txt_plata_pura.value = "$ " + "{:,}".format(int(precios_base["plata"])).replace(",", ".")
+    def actualizar_interfaz(p_oro_oz, p_plata_oz):
+        # Conversión a gramo (puedes cambiar VALOR_DOLAR cuando quieras)
+        gramo_oro = (p_oro_oz * VALOR_DOLAR) / ONZA_A_GRAMO
+        gramo_plata = (p_plata_oz * VALOR_DOLAR) / ONZA_A_GRAMO
+
+        # Mostrar valores principales
+        txt_oro_24.value = f"USD {gramo_oro:.2f}"
+        txt_plata_pura.value = f"USD {gramo_plata:.2f}"
 
         col_oro.controls.clear()
         col_plata.controls.clear()
 
         for nombre, mult in leyes.items():
             es_oro = "Oro" in nombre
-            base = precios_base["oro"] if es_oro else precios_base["plata"]
-            valor = int(base * mult)
+            base = gramo_oro if es_oro else gramo_plata
+            valor_final = base * mult
             
             color = "amber" if es_oro else "bluegrey"
-            txt = ft.Text(f"{nombre}: $ " + "{:,}".format(valor).replace(",", "."), size=18, color=color)
+            # Formateo a 2 decimales para USD
+            texto_lista = ft.Text(f"{nombre}: USD {valor_final:.2f}", size=18, color=color)
             
-            if es_oro: col_oro.controls.append(txt)
-            else: col_plata.controls.append(txt)
+            if es_oro:
+                col_oro.controls.append(texto_lista)
+            else:
+                col_plata.controls.append(texto_lista)
         page.update()
 
     def obtener_datos(e=None):
-        txt_status.value = "Consultando SilverPrice..."
+        txt_status.value = "Consultando gold-api.com..."
         page.update()
 
+        headers = {
+            "User-Agent": "okhttp/4.9.2",
+            "Accept": "application/json"
+        }
+
         try:
-            # Headers obligatorios para que la API de SilverPrice no dé Forbidden
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'referer': 'https://silverprice.org/',
-                'accept': 'application/json, text/javascript, */*; q=0.01'
-            }
+            # Petición para Plata (XAG)
+            res_xag = requests.get("https://api.gold-api.com/price/XAG", headers=headers, timeout=10)
+            data_xag = res_xag.json()
+            precio_plata_oz = data_xag["price"]
 
-            # Consultar Plata (XAG)
-            res_xag = requests.get('https://data-asg.goldprice.org/GetData/USD-XAG/1', headers=headers, timeout=10)
-            # Consultar Oro (XAU)
-            res_xau = requests.get('https://data-asg.goldprice.org/GetData/USD-XAU/1', headers=headers, timeout=10)
+            # Petición para Oro (XAU)
+            res_xau = requests.get("https://api.gold-api.com/price/XAU", headers=headers, timeout=10)
+            data_xau = res_xau.json()
+            precio_oro_oz = data_xau["price"]
 
-            if res_xag.status_code == 200 and res_xau.status_code == 200:
-                # La API responde "precio,precio,precio...", tomamos el primero
-                plata_usd = float(res_xag.text.split(',')[0])
-                oro_usd = float(res_xau.text.split(',')[0])
-
-                # Conversión manual a CLP
-                precios_base["oro"] = (oro_usd * DOLAR_MANUAL) / ONZA_A_GRAMO
-                precios_base["plata"] = (plata_usd * DOLAR_MANUAL) / ONZA_A_GRAMO
-
-                txt_status.value = "Actualizado: " + time.strftime("%H:%M:%S")
-                actualizar_interfaz()
-            else:
-                txt_status.value = f"Error API: {res_xag.status_code}"
+            actualizar_interfaz(precio_oro_oz, precio_plata_oz)
+            txt_status.value = f"Actualizado: {data_xag['updatedAtReadable']}"
+            txt_status.color = "green"
 
         except Exception as ex:
-            txt_status.value = "Error de conexión o formato"
+            txt_status.value = "Error al conectar con la API"
+            txt_status.color = "red"
         
         page.update()
 
     # --- ESTRUCTURA ---
     page.add(
-        ft.Text("JOYERO PRO", size=25, weight="bold"),
-        ft.Text(f"Dólar base: ${DOLAR_MANUAL}", size=12, color="white60"),
+        ft.Text("PRECIOS INTERNACIONALES (1g)", size=25, weight="bold"),
         ft.Divider(),
-        ft.Text("ORO 24K", size=16, color="amber"),
+        
+        ft.Text("ORO (XAU)", size=16, color="amber"),
         txt_oro_24,
         col_oro,
+        
         ft.Divider(height=30),
-        ft.Text("PLATA PURA", size=16, color="bluegrey"),
+        
+        ft.Text("PLATA (XAG)", size=16, color="bluegrey"),
         txt_plata_pura,
         col_plata,
+        
         ft.Divider(height=30),
+        
         ft.ElevatedButton("ACTUALIZAR", icon="refresh", on_click=obtener_datos),
         txt_status
     )
