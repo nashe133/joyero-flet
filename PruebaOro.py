@@ -1,17 +1,17 @@
 import flet as ft
 import requests
-import json
 import time
 
 def main(page: ft.Page):
-    page.title = "Joyero Pro - SilverPrice API"
+    page.title = "Joyero Pro"
     page.theme_mode = "dark"
     page.horizontal_alignment = "center"
     page.scroll = "auto"
-    page.padding = 20
 
-    # --- TUS LEYES ORIGINALES (Mantenidas estrictamente) ---
+    # --- CONFIGURACIÓN ---
     ONZA_A_GRAMO = 31.1035
+    DOLAR_MANUAL = 965  # <--- Cambia este valor según el dólar del día
+    
     precios_base = {"oro": 0, "plata": 0}
     
     leyes = {
@@ -20,13 +20,11 @@ def main(page: ft.Page):
         "Plata 950": 0.950, "Plata 925": 0.925, "Plata 900": 0.900
     }
 
-    # --- ELEMENTOS DE INTERFAZ ---
+    # --- UI ---
     txt_oro_24 = ft.Text("$ 0", size=40, weight="bold", color="amber")
     txt_plata_pura = ft.Text("$ 0", size=40, weight="bold", color="bluegrey")
-    
     col_oro = ft.Column(horizontal_alignment="center")
     col_plata = ft.Column(horizontal_alignment="center")
-    
     txt_status = ft.Text("Listo", size=12, italic=True)
 
     def actualizar_interfaz():
@@ -41,57 +39,55 @@ def main(page: ft.Page):
         for nombre, mult in leyes.items():
             es_oro = "Oro" in nombre
             base = precios_base["oro"] if es_oro else precios_base["plata"]
-            valor_gramo = int(base * mult)
+            valor = int(base * mult)
+            
             color = "amber" if es_oro else "bluegrey"
+            txt = ft.Text(f"{nombre}: $ " + "{:,}".format(valor).replace(",", "."), size=18, color=color)
             
-            texto_lista = ft.Text(nombre + ": $ " + "{:,}".format(valor_gramo).replace(",", "."), size=18, color=color)
-            
-            if es_oro:
-                col_oro.controls.append(texto_lista)
-            else:
-                col_plata.controls.append(texto_lista)
+            if es_oro: col_oro.controls.append(txt)
+            else: col_plata.controls.append(txt)
         page.update()
 
     def obtener_datos(e=None):
-        txt_status.value = "Consultando SilverPrice API..."
+        txt_status.value = "Consultando SilverPrice..."
         page.update()
 
         try:
-            # 1. Primero necesitamos el valor del Dólar para convertir el USD de la API a CLP
-            # Usamos una fuente rápida y sin bloqueos
-            res_d = requests.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=5).json()
-            valor_dolar = res_d['rates']['CLP']
-
-            # 2. Consultar la nueva API de SilverPrice (Plata)
+            # Headers obligatorios para que la API de SilverPrice no dé Forbidden
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'referer': 'https://silverprice.org/'
+                'referer': 'https://silverprice.org/',
+                'accept': 'application/json, text/javascript, */*; q=0.01'
             }
-            
-            # API Plata (USD/oz)
+
+            # Consultar Plata (XAG)
             res_xag = requests.get('https://data-asg.goldprice.org/GetData/USD-XAG/1', headers=headers, timeout=10)
-            # La API devuelve algo como "90.11,89.50,..." tomamos el primer valor
-            plata_usd_onza = float(res_xag.text.split(',')[0])
-
-            # API Oro (USD/oz) - Usamos la misma ruta pero para Oro
+            # Consultar Oro (XAU)
             res_xau = requests.get('https://data-asg.goldprice.org/GetData/USD-XAU/1', headers=headers, timeout=10)
-            oro_usd_onza = float(res_xau.text.split(',')[0])
 
-            # 3. Cálculo: (Precio USD * Dólar CLP) / Gramos Onza
-            precios_base["oro"] = (oro_usd_onza * valor_dolar) / ONZA_A_GRAMO
-            precios_base["plata"] = (plata_usd_onza * valor_dolar) / ONZA_A_GRAMO
+            if res_xag.status_code == 200 and res_xau.status_code == 200:
+                # La API responde "precio,precio,precio...", tomamos el primero
+                plata_usd = float(res_xag.text.split(',')[0])
+                oro_usd = float(res_xau.text.split(',')[0])
 
-            txt_status.value = f"Sincronizado (Dólar: ${valor_dolar})"
-            actualizar_interfaz()
+                # Conversión manual a CLP
+                precios_base["oro"] = (oro_usd * DOLAR_MANUAL) / ONZA_A_GRAMO
+                precios_base["plata"] = (plata_usd * DOLAR_MANUAL) / ONZA_A_GRAMO
+
+                txt_status.value = "Actualizado: " + time.strftime("%H:%M:%S")
+                actualizar_interfaz()
+            else:
+                txt_status.value = f"Error API: {res_xag.status_code}"
 
         except Exception as ex:
-            txt_status.value = "Error: La API requiere Proxy o está saturada"
+            txt_status.value = "Error de conexión o formato"
         
         page.update()
 
     # --- ESTRUCTURA ---
     page.add(
-        ft.Text("PRECIOS EN VIVO (1g)", size=25, weight="bold"),
+        ft.Text("JOYERO PRO", size=25, weight="bold"),
+        ft.Text(f"Dólar base: ${DOLAR_MANUAL}", size=12, color="white60"),
         ft.Divider(),
         ft.Text("ORO 24K", size=16, color="amber"),
         txt_oro_24,
