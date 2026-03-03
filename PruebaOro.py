@@ -31,7 +31,7 @@ def main(page: ft.Page):
 
     txt_status = ft.Text("Listo para consultar", size=12)
 
-    # --- ACTUALIZAR LEYES ---
+    # --- ACTUALIZAR LISTAS ---
     def actualizar_interfaz(oro_base, plata_base):
         col_oro.controls.clear()
         col_plata.controls.clear()
@@ -49,45 +49,38 @@ def main(page: ft.Page):
 
         page.update()
 
-    # --- OBTENER DATOS ---
+    # --- OBTENER DATOS (API NUEVA) ---
     def obtener_datos(e=None):
         txt_status.value = "Consultando valores..."
         txt_status.color = "white"
         page.update()
 
         try:
-            # ---------- ORO ----------
-            headers = {
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "*/*"
-            }
-
-            res_oro = requests.get(
-                "https://data-asg.goldprice.org/GetData/USD-XAU/1",
-                headers=headers,
+            # --- ORO ---
+            oro_res = requests.get(
+                "https://api.gold-api.com/price/XAU",
                 timeout=10
             )
-
-            val_oro = float(res_oro.text.split(",")[0])
+            oro_data = oro_res.json()
+            val_oro = float(oro_data["price"])
             txt_oro_raw.value = f"{val_oro:.2f}"
 
-            # ---------- PLATA (API NUEVA) ----------
-            res_plata = requests.get(
+            # --- PLATA ---
+            plata_res = requests.get(
                 "https://api.gold-api.com/price/XAG",
                 timeout=10
             )
-
-            val_plata = float(res_plata.json()["price"])
+            plata_data = plata_res.json()
+            val_plata = float(plata_data["price"])
             txt_plata_raw.value = f"{val_plata:.2f}"
 
-            # ---------- ACTUALIZAR UI ----------
             actualizar_interfaz(val_oro, val_plata)
 
             txt_status.value = f"Actualizado: {time.strftime('%H:%M:%S')}"
             txt_status.color = "green"
 
-        except Exception:
-            txt_status.value = "Error al conectar con las APIs"
+        except Exception as e:
+            txt_status.value = "Error al conectar con la API"
             txt_status.color = "red"
 
         page.update()
@@ -118,7 +111,6 @@ def main(page: ft.Page):
         txt_status
     )
 
-    # Carga inicial
     obtener_datos()
 
 ft.app(target=main)
