@@ -1,15 +1,16 @@
 import flet as ft
 import requests
+import json
 import time
 
 def main(page: ft.Page):
-    page.title = "Joyero Pro"
+    page.title = "Joyero Pro - SilverPrice API"
     page.theme_mode = "dark"
     page.horizontal_alignment = "center"
     page.scroll = "auto"
     page.padding = 20
 
-    # --- NO MODIFICADO: TUS LEYES ORIGINALES ---
+    # --- TUS LEYES ORIGINALES (Mantenidas estrictamente) ---
     ONZA_A_GRAMO = 31.1035
     precios_base = {"oro": 0, "plata": 0}
     
@@ -26,13 +27,11 @@ def main(page: ft.Page):
     col_oro = ft.Column(horizontal_alignment="center")
     col_plata = ft.Column(horizontal_alignment="center")
     
-    txt_status = ft.Text("Sincronizando...", size=12, italic=True)
-    txt_info_mercado = ft.Text("", size=11, color="white60")
+    txt_status = ft.Text("Listo", size=12, italic=True)
 
     def actualizar_interfaz():
         if precios_base["oro"] == 0: return
         
-        # Precios grandes (Puros)
         txt_oro_24.value = "$ " + "{:,}".format(int(precios_base["oro"])).replace(",", ".")
         txt_plata_pura.value = "$ " + "{:,}".format(int(precios_base["plata"])).replace(",", ".")
 
@@ -54,58 +53,55 @@ def main(page: ft.Page):
         page.update()
 
     def obtener_datos(e=None):
-        txt_status.value = "Consultando valores internacionales..."
+        txt_status.value = "Consultando SilverPrice API..."
         page.update()
 
         try:
-            # 1. Obtener Dólar en Chile (Mindicador)
-            res_dolar = requests.get("https://api.mindicador.cl/dolar", timeout=10).json()
-            valor_dolar = res_dolar['serie'][0]['valor']
-            
-            # 2. Obtener Metales en USD (Yahoo Finance - Sin bloqueo 403)
-            headers = {"User-Agent": "Mozilla/5.0"}
-            
-            # Oro Spot USD
-            res_xau = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X", headers=headers).json()
-            oro_usd_onza = res_xau['chart']['result'][0]['meta']['regularMarketPrice']
-            
-            # Plata Spot USD
-            res_xag = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/XAGUSD=X", headers=headers).json()
-            plata_usd_onza = res_xag['chart']['result'][0]['meta']['regularMarketPrice']
+            # 1. Primero necesitamos el valor del Dólar para convertir el USD de la API a CLP
+            # Usamos una fuente rápida y sin bloqueos
+            res_d = requests.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=5).json()
+            valor_dolar = res_d['rates']['CLP']
 
-            # 3. Transformación a CLP por Gramo
-            # (Precio Onza USD * Dólar CLP) / 31.1035
+            # 2. Consultar la nueva API de SilverPrice (Plata)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'referer': 'https://silverprice.org/'
+            }
+            
+            # API Plata (USD/oz)
+            res_xag = requests.get('https://data-asg.goldprice.org/GetData/USD-XAG/1', headers=headers, timeout=10)
+            # La API devuelve algo como "90.11,89.50,..." tomamos el primer valor
+            plata_usd_onza = float(res_xag.text.split(',')[0])
+
+            # API Oro (USD/oz) - Usamos la misma ruta pero para Oro
+            res_xau = requests.get('https://data-asg.goldprice.org/GetData/USD-XAU/1', headers=headers, timeout=10)
+            oro_usd_onza = float(res_xau.text.split(',')[0])
+
+            # 3. Cálculo: (Precio USD * Dólar CLP) / Gramos Onza
             precios_base["oro"] = (oro_usd_onza * valor_dolar) / ONZA_A_GRAMO
             precios_base["plata"] = (plata_usd_onza * valor_dolar) / ONZA_A_GRAMO
 
-            txt_info_mercado.value = f"Dólar: ${valor_dolar} | Oro: {oro_usd_onza} USD/oz | Plata: {plata_usd_onza} USD/oz"
-            txt_status.value = "Sincronizado: " + time.strftime("%H:%M:%S")
+            txt_status.value = f"Sincronizado (Dólar: ${valor_dolar})"
             actualizar_interfaz()
 
         except Exception as ex:
-            txt_status.value = "Error de red. Reintente."
+            txt_status.value = "Error: La API requiere Proxy o está saturada"
         
         page.update()
 
     # --- ESTRUCTURA ---
     page.add(
         ft.Text("PRECIOS EN VIVO (1g)", size=25, weight="bold"),
-        txt_info_mercado,
         ft.Divider(),
-        
         ft.Text("ORO 24K", size=16, color="amber"),
         txt_oro_24,
         col_oro,
-        
         ft.Divider(height=30),
-        
         ft.Text("PLATA PURA", size=16, color="bluegrey"),
         txt_plata_pura,
         col_plata,
-        
         ft.Divider(height=30),
-        
-        ft.ElevatedButton("ACTUALIZAR MERCADO", icon="refresh", on_click=obtener_datos),
+        ft.ElevatedButton("ACTUALIZAR", icon="refresh", on_click=obtener_datos),
         txt_status
     )
     
