@@ -42,8 +42,8 @@ def main(page: ft.Page):
             valor_final = base * mult
             color = "amber" if es_oro else "bluegrey"
 
-            col = col_oro if es_oro else col_plata
-            col.controls.append(
+            destino = col_oro if es_oro else col_plata
+            destino.controls.append(
                 ft.Text(f"{nombre}: {valor_final:.2f}", size=18, color=color)
             )
 
@@ -77,8 +77,7 @@ def main(page: ft.Page):
                 timeout=10
             )
 
-            data_plata = res_plata.json()
-            val_plata = float(data_plata["price"])
+            val_plata = float(res_plata.json()["price"])
             txt_plata_raw.value = f"{val_plata:.2f}"
 
             # ---------- ACTUALIZAR UI ----------
@@ -87,7 +86,7 @@ def main(page: ft.Page):
             txt_status.value = f"Actualizado: {time.strftime('%H:%M:%S')}"
             txt_status.color = "green"
 
-        except Exception as e:
+        except Exception:
             txt_status.value = "Error al conectar con las APIs"
             txt_status.color = "red"
 
@@ -112,7 +111,7 @@ def main(page: ft.Page):
 
         ft.ElevatedButton(
             "ACTUALIZAR DATOS",
-            icon=ft.icons.REFRESH,
+            icon="refresh",
             on_click=obtener_datos
         ),
 
