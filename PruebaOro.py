@@ -3,105 +3,82 @@ import requests
 import time
 
 def main(page: ft.Page):
-    page.title = "Joyero Pro - Control Total"
-    page.theme_mode = "dark"
-    page.horizontal_alignment = "center"
-    page.scroll = "auto"
+    # --- VARIABLES DE CONTROL ---
+    DOLAR_MANUAL = 960.0 
+    ONZA_A_GRAMO = 31.1035
 
-    # --- VARIABLES DE ESTADO ---
-    state = {
-        "dolar": 965.0,  # Valor inicial por defecto
-        "oro_usd": 0.0,
-        "plata_usd": 0.0,
-        "onza": 31.1035
-    }
+    # --- UI ---
+    txt_oro = ft.Text("$ 0", size=35, color="amber", weight="bold")
+    txt_plata = ft.Text("$ 0", size=35, color="bluegrey", weight="bold")
+    txt_status = ft.Text("Listo para actualizar", size=12)
 
-    # --- ELEMENTOS DE UI ---
-    txt_dolar_valor = ft.Text(f"${state['dolar']}", size=30, weight="bold", color="green")
-    txt_oro_clp = ft.Text("$ 0", size=35, weight="bold", color="amber")
-    txt_plata_clp = ft.Text("$ 0", size=35, weight="bold", color="bluegrey")
-    
-    status_dolar = ft.Text("Dólar estático", size=12, italic=True)
-    status_metales = ft.Text("Metales sin cargar", size=12, italic=True)
+    def actualizar_metales_por_separado(e):
+        txt_status.value = "Petición 1: Obteniendo Oro..."
+        txt_status.color = "white"
+        page.update()
 
-    # --- LÓGICA: ACTUALIZAR INTERFAZ ---
-    def refrescar_calculos():
-        if state["oro_usd"] > 0:
-            oro_gramo = (state["oro_usd"] * state["dolar"]) / state["onza"]
-            txt_oro_clp.value = f"$ {int(oro_gramo):,}".replace(",", ".")
+        try:
+            # HEADERS LIMPIOS PARA CADA PETICIÓN
+            header_base = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': '*/*'
+            }
+
+            # --- PETICIÓN 1: ORO (XAU) ---
+            # Se ejecuta, se cierra y se procesa antes de empezar la siguiente
+            res_oro = requests.get(
+                'https://data-asg.goldprice.org/GetData/USD-XAU/1', 
+                headers=header_base, 
+                timeout=10
+            )
+            oro_usd = float(res_oro.text.split(',')[0])
             
-        if state["plata_usd"] > 0:
-            plata_gramo = (state["plata_usd"] * state["dolar"]) / state["onza"]
-            txt_plata_clp.value = f"$ {int(plata_gramo):,}".replace(",", ".")
+            # Pausa técnica de milisegundos para asegurar separación de hilos
+            time.sleep(0.5)
+
+            txt_status.value = "Petición 2: Obteniendo Plata..."
+            page.update()
+
+            # --- PETICIÓN 2: PLATA (XAG) ---
+            # Petición nueva, sin conexión previa con la de oro
+            res_plata = requests.get(
+                'https://data-asg.goldprice.org/GetData/USD-XAG/1', 
+                headers=header_base, 
+                timeout=10
+            )
+            plata_usd = float(res_plata.text.split(',')[0])
+
+            # --- CÁLCULOS FINALES ---
+            oro_clp = (oro_usd * DOLAR_MANUAL) / ONZA_A_GRAMO
+            plata_clp = (plata_usd * DOLAR_MANUAL) / ONZA_A_GRAMO
+
+            txt_oro.value = f"$ {int(oro_clp):,}".replace(",", ".")
+            txt_plata.value = f"$ {int(plata_clp):,}".replace(",", ".")
+            
+            txt_status.value = f"Actualizado: {time.strftime('%H:%M:%S')}"
+            txt_status.color = "green"
+
+        except Exception as ex:
+            txt_status.value = "Error en la secuencia de peticiones"
+            txt_status.color = "red"
         
         page.update()
 
-    # --- MOTOR 1: SÓLO DÓLAR ---
-    def actualizar_dolar(e):
-        status_dolar.value = "Consultando dólar..."
-        page.update()
-        try:
-            # Usamos una API de dólar que no suele dar problemas de CORS
-            res = requests.get("https://api.exchangerate-api.com/v4/latest/USD", timeout=5).json()
-            state["dolar"] = float(res['rates']['CLP'])
-            txt_dolar_valor.value = f"${state['dolar']}"
-            status_dolar.value = f"Dólar actualizado: {time.strftime('%H:%M')}"
-            refrescar_calculos()
-        except:
-            status_dolar.value = "Error al traer dólar. Se mantiene valor previo."
-        page.update()
+    # Botón independiente para el Dólar (puedes añadir su lógica aparte)
+    btn_dolar = ft.ElevatedButton("DÓLAR (MANUAL: 960)", icon="money_off", disabled=True)
 
-    # --- MOTOR 2: SÓLO METALES (TU API DE GETDATA) ---
-    def actualizar_metales(e):
-        status_metales.value = "Consultando metales..."
-        page.update()
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0',
-                'Referer': 'https://silverprice.org/'
-            }
-            # Plata
-            r_xag = requests.get('https://data-asg.goldprice.org/GetData/USD-XAG/1', headers=headers, timeout=8)
-            # Oro
-            r_xau = requests.get('https://data-asg.goldprice.org/GetData/USD-XAU/1', headers=headers, timeout=8)
-
-            state["plata_usd"] = float(r_xag.text.split(',')[0])
-            state["oro_usd"] = float(r_xau.text.split(',')[0])
-            
-            status_metales.value = f"Metales actualizados: {time.strftime('%H:%M')}"
-            refrescar_calculos()
-        except:
-            status_metales.value = "Error API Metales. Reintente."
-        page.update()
-
-    # --- DISEÑO ---
     page.add(
-        ft.Card(
-            content=ft.Container(
-                padding=15,
-                content=ft.Column([
-                    ft.Text("VALOR DÓLAR (CLP)", size=12),
-                    txt_dolar_valor,
-                    ft.ElevatedButton("ACTUALIZAR DÓLAR", icon="money", on_click=actualizar_dolar),
-                    status_dolar
-                ], horizontal_alignment="center")
-            )
-        ),
-        ft.Divider(height=20, color="transparent"),
-        ft.Card(
-            content=ft.Container(
-                padding=15,
-                content=ft.Column([
-                    ft.Text("METALES (PRECIO GRAMO CLP)", size=12),
-                    ft.Row([
-                        ft.Column([ft.Text("ORO 24K", color="amber"), txt_oro_clp], horizontal_alignment="center"),
-                        ft.Column([ft.Text("PLATA PURA", color="bluegrey"), txt_plata_clp], horizontal_alignment="center"),
-                    ], alignment="spaceAround"),
-                    ft.ElevatedButton("ACTUALIZAR METALES", icon="refresh", on_click=actualizar_metales),
-                    status_metales
-                ], horizontal_alignment="center")
-            )
-        )
+        ft.Column([
+            ft.Text("ACTUALIZACIÓN SECUENCIAL", weight="bold"),
+            btn_dolar,
+            ft.Divider(),
+            ft.Row([
+                ft.Column([ft.Text("ORO"), txt_oro], horizontal_alignment="center"),
+                ft.Column([ft.Text("PLATA"), txt_plata], horizontal_alignment="center"),
+            ], alignment="spaceAround"),
+            ft.ElevatedButton("ACTUALIZAR METALES (1 a 1)", icon="refresh", on_click=actualizar_metales_por_separado),
+            txt_status
+        ], horizontal_alignment="center", spacing=20)
     )
 
 ft.app(target=main)
