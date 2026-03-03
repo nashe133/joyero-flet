@@ -4,106 +4,154 @@ import json
 import random
 
 def main(page: ft.Page):
-    page.title = "Joyero Pro: Sistema Anti-Bloqueo"
+    page.title = "Joyero Pro: Cotizador Realtime"
     page.theme_mode = "dark"
+    page.horizontal_alignment = "center"
     page.scroll = "auto"
+    page.padding = 20
 
-    datos_mercado = {"oro": 0, "plata": 0}
-    historial_lote = []
+    # --- CONFIGURACIÓN TÉCNICA ---
+    ONZA_A_GRAMO = 31.1035
+    precios_base = {"oro": 0, "plata": 0}
+    
+    leyes = {
+        "Oro 22K": 0.9167, "Oro 21K": 0.900, "Oro 18K": 0.750, 
+        "Oro 14K": 0.583, "Oro 10K": 0.4167, "Plata 980": 0.980, 
+        "Plata 950": 0.950, "Plata 925": 0.925, "Plata 900": 0.900
+    }
 
-    # --- LISTA DE AGENTES PARA ROTAR ---
+    # Lista de identidades para rotar
     USER_AGENTS = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1",
-        "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.164 Mobile Safari/537.36"
     ]
 
-    # --- ELEMENTOS UI ---
-    in_gramos = ft.TextField(label="Gramos", value="0", width=120)
-    dd_ley = ft.Dropdown(
-        label="Ley", width=150,
-        options=[ft.dropdown.Option("Plata 925"), ft.dropdown.Option("Plata 900"), ft.dropdown.Option("Oro 18K")],
-        value="Plata 925"
+    # --- ELEMENTOS DE INTERFAZ ---
+    in_gramos = ft.TextField(
+        label="Gramos", value="1", width=150, text_align="center",
+        keyboard_type="number", on_change=lambda _: actualizar_interfaz()
     )
-    col_resumen = ft.Column()
-    txt_gran_total = ft.Text("$ 0", size=35, weight="bold", color="green")
-    txt_status = ft.Text("Listo", size=12)
 
-    def obtener_precios(e=None):
-        txt_status.value = "Sincronizando con identidad nueva..."
-        txt_status.color = "white60"
-        page.update()
+    in_margen = ft.TextField(
+        label="Ajuste %", value="0", width=120, text_align="center",
+        suffix_text="%", on_change=lambda _: actualizar_interfaz()
+    )
+
+    col_oro = ft.Column(horizontal_alignment="center", spacing=8)
+    col_plata = ft.Column(horizontal_alignment="center", spacing=8)
+    txt_status = ft.Text("Iniciando...", size=12, italic=True, color="white60")
+
+    def actualizar_interfaz():
+        if precios_base["oro"] == 0: return
         
         try:
-            # 1. Crear sesión para manejar cookies automáticamente
-            session = requests.Session()
-            
-            # 2. Seleccionar un User-Agent aleatorio
-            user_agent_random = random.choice(USER_AGENTS)
-            
-            # 3. Headers ultra-completos (Engaño total al servidor)
-            headers = {
-                "User-Agent": user_agent_random,
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-                "Referer": "https://goldprice.org/",
-                "Origin": "https://goldprice.org/",
-                "DNT": "1", # Do Not Track
-                "Cache-Control": "no-cache"
-            }
+            gramos = float(in_gramos.value.replace(",", ".") or 0)
+            margen = 1 + (float(in_margen.value or 0) / 100)
+        except:
+            gramos, margen = 0, 1
 
-            # 4. Probamos con el proxy alternativo rotando la identidad
-            target_url = "https://data-asg.goldprice.org/dbXRates/CLP"
-            # Usamos corsproxy.io que es el más permisivo actualmente
-            proxy_url = f"https://corsproxy.io/?{target_url}"
+        col_oro.controls.clear()
+        col_plata.controls.clear()
+
+        for nombre, mult in leyes.items():
+            es_oro = "Oro" in nombre
+            base = precios_base["oro"] if es_oro else precios_base["plata"]
+            total = int(base * mult * gramos * margen)
+            color = "amber" if es_oro else "bluegrey"
             
-            r = session.get(proxy_url, headers=headers, timeout=12)
-            
-            if r.status_code == 200:
-                data = r.json()
-                item = data['items'][0]
-                datos_mercado["oro"] = item['xauPrice'] / 31.1035
-                datos_mercado["plata"] = item['xagPrice'] / 31.1035
-                txt_status.value = f"Éxito (ID: {user_agent_random[10:25]}...)"
-                txt_status.color = "green"
-            else:
-                txt_status.value = f"Error {r.status_code}. Cambiando IP..."
-                txt_status.color = "orange"
-        except Exception as ex:
-            txt_status.value = "Falla de red. Reintente."
-            txt_status.color = "red"
-        
+            col = col_oro if es_oro else col_plata
+            col.controls.append(
+                ft.Container(
+                    content=ft.Row([
+                        ft.Column([
+                            ft.Text(nombre, weight="bold", size=14),
+                            ft.Text(f"{gramos}g", size=11, color="white60"),
+                        ], spacing=2),
+                        ft.Text(f"$ {total:,}".replace(",", "."), size=20, color=color, weight="bold")
+                    ], alignment="spaceBetween"),
+                    padding=15, bgcolor="white10", border_radius=12, width=350,
+                    border=ft.border.all(1, "white10")
+                )
+            )
         page.update()
 
-    # --- LÓGICA DE CÁLCULO (Igual que antes) ---
-    def calcular_lote(e):
-        try:
-            leyes_dict = {"Plata 925": 0.925, "Plata 900": 0.900, "Oro 18K": 0.750}
-            peso = float(in_gramos.value.replace(",", "."))
-            base = datos_mercado["oro"] if "Oro" in dd_ley.value else datos_mercado["plata"]
-            valor = int(peso * base * leyes_dict[dd_ley.value])
-            historial_lote.append(ft.Text(f"• {peso}g {dd_ley.value}: $ {valor:,}".replace(",", ".")))
-            col_resumen.controls = historial_lote
-            
-            # Sumar total
-            total = sum([int(t.value.split("$ ")[1].replace(".", "")) for t in historial_lote])
-            txt_gran_total.value = f"$ {total:,}".replace(",", ".")
-            in_gramos.value = "0"
-            page.update()
-        except: pass
+    def obtener_datos(e=None):
+        txt_status.value = "Rotando identidad y consultando..."
+        txt_status.color = "amber"
+        page.update()
 
+        url_target = "https://data-asg.goldprice.org/dbXRates/CLP"
+        # Proxies disponibles para redundancia
+        proxies = [
+            f"https://api.allorigins.win/get?url={url_target}",
+            f"https://corsproxy.io/?{url_target}"
+        ]
+        
+        # Mezclamos los proxies para no usar siempre el mismo al inicio
+        random.shuffle(proxies)
+
+        for p_url in proxies:
+            try:
+                headers = {
+                    "User-Agent": random.choice(USER_AGENTS),
+                    "Referer": "https://goldprice.org/",
+                    "Cache-Control": "no-cache"
+                }
+                
+                r = requests.get(p_url, headers=headers, timeout=12)
+                
+                if r.status_code == 200:
+                    # AllOrigins devuelve un JSON con el campo 'contents'
+                    if "allorigins" in p_url:
+                        res_json = r.json()
+                        data = json.loads(res_json['contents'])
+                    else:
+                        # Corsproxy devuelve el JSON directo
+                        data = r.json()
+                    
+                    item = data['items'][0]
+                    precios_base["oro"] = item['xauPrice'] / ONZA_A_GRAMO
+                    precios_base["plata"] = item['xagPrice'] / ONZA_A_GRAMO
+                    
+                    txt_status.value = f"Sincronizado: {data['date']}"
+                    txt_status.color = "green"
+                    actualizar_interfaz()
+                    return # Si tuvo éxito, salimos del bucle de proxies
+            except Exception as ex:
+                continue # Si falla un proxy, intenta con el siguiente
+        
+        txt_status.value = "Error: Servidores saturados. Reintenta en 1 min."
+        txt_status.color = "red"
+        page.update()
+
+    # --- ESTRUCTURA ---
     page.add(
-        ft.Text("CALCULADORA ANTI-BLOQUEO", weight="bold"),
-        ft.Row([in_gramos, dd_ley, ft.IconButton("add", on_click=calcular_lote)]),
-        col_resumen,
-        txt_gran_total,
+        ft.Text("JOYERO PRO", size=28, weight="black", color="amber"),
+        ft.Text("MODO COMPRA / VENTA", size=12, color="white60"),
+        ft.Divider(height=10, color="transparent"),
+        
         ft.Row([
-            ft.IconButton("refresh", on_click=obtener_precios),
-            txt_status
-        ])
+            in_gramos, 
+            in_margen,
+            ft.IconButton(ft.icons.REFRESH_ROUNDED, on_click=obtener_datos, icon_color="amber")
+        ], alignment="center"),
+        
+        ft.Divider(height=20, color="white10"),
+        
+        ft.Text("ORO", size=16, weight="bold", color="amber"),
+        col_oro,
+        
+        ft.Divider(height=20, color="transparent"),
+        
+        ft.Text("PLATA", size=16, weight="bold", color="bluegrey"),
+        col_plata,
+        
+        ft.Divider(height=20),
+        txt_status
     )
-    obtener_precios()
+    
+    obtener_datos()
 
 ft.app(target=main)
