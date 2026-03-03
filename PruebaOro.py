@@ -27,7 +27,6 @@ def main(page: ft.Page):
     ]
 
     # --- ELEMENTOS DE INTERFAZ ---
-    # Eliminado 'suffix_text' para evitar el error de versión
     in_gramos = ft.TextField(
         label="Gramos", value="1", width=140, text_align="center",
         on_change=lambda _: actualizar_interfaz()
@@ -40,7 +39,7 @@ def main(page: ft.Page):
 
     col_oro = ft.Column(horizontal_alignment="center", spacing=8)
     col_plata = ft.Column(horizontal_alignment="center", spacing=8)
-    txt_status = ft.Text("Iniciando...", size=12, italic=True)
+    txt_status = ft.Text("Iniciando...", size=12)
 
     def actualizar_interfaz():
         if precios_base["oro"] == 0: return
@@ -67,9 +66,9 @@ def main(page: ft.Page):
                 content=ft.Row([
                     ft.Column([
                         ft.Text(nombre, weight="bold", size=14),
-                        ft.Text(f"{gramos}g", size=11),
+                        ft.Text(str(gramos) + "g", size=11),
                     ], spacing=2),
-                    ft.Text(f"$ {total:,}".replace(",", "."), size=20, color=color, weight="bold")
+                    ft.Text("$ " + "{:,}".format(total).replace(",", "."), size=20, color=color, weight="bold")
                 ], alignment="spaceBetween"),
                 padding=15, bgcolor="white10", border_radius=12, width=340
             )
@@ -79,13 +78,13 @@ def main(page: ft.Page):
         page.update()
 
     def obtener_datos(e=None):
-        txt_status.value = "Actualizando mercado..."
+        txt_status.value = "Actualizando precios..."
         page.update()
 
         url_target = "https://data-asg.goldprice.org/dbXRates/CLP"
         proxies = [
-            f"https://corsproxy.io/?{url_target}",
-            f"https://api.allorigins.win/get?url={url_target}"
+            "https://corsproxy.io/?" + url_target,
+            "https://api.allorigins.win/get?url=" + url_target
         ]
         
         random.shuffle(proxies)
@@ -96,7 +95,6 @@ def main(page: ft.Page):
                 r = requests.get(p_url, headers=headers, timeout=12)
                 
                 if r.status_code == 200:
-                    # Detectar si el proxy envolvió el JSON o no
                     raw_res = r.json()
                     data = json.loads(raw_res['contents']) if 'contents' in raw_res else raw_res
                     
@@ -114,12 +112,13 @@ def main(page: ft.Page):
         page.update()
 
     # --- ESTRUCTURA ---
+    # Usamos "refresh" en lugar de ft.icons.REFRESH para evitar el error de atributo
     page.add(
         ft.Text("JOYERO PRO", size=26, weight="black", color="amber"),
         ft.Row([
             in_gramos, 
             in_margen,
-            ft.IconButton(ft.icons.REFRESH, on_click=obtener_datos)
+            ft.IconButton(icon="refresh", on_click=obtener_datos)
         ], alignment="center"),
         ft.Divider(height=20),
         ft.Text("ORO", weight="bold", color="amber"),
