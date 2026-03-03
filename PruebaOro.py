@@ -8,9 +8,7 @@ def main(page: ft.Page):
     page.theme_mode = "dark"
     page.horizontal_alignment = "center"
     page.scroll = "auto"
-    page.padding = 20
 
-    # --- CONFIGURACIÓN TÉCNICA ---
     ONZA_A_GRAMO = 31.1035
     precios_base = {"oro": 0, "plata": 0}
     
@@ -27,31 +25,20 @@ def main(page: ft.Page):
     ]
 
     # --- ELEMENTOS DE INTERFAZ ---
-    in_gramos = ft.TextField(
-        label="Gramos", value="1", width=140, text_align="center",
-        on_change=lambda _: actualizar_interfaz()
-    )
-
-    in_margen = ft.TextField(
-        label="Ajuste %", value="0", width=140, text_align="center",
-        on_change=lambda _: actualizar_interfaz()
-    )
-
-    col_oro = ft.Column(horizontal_alignment="center", spacing=8)
-    col_plata = ft.Column(horizontal_alignment="center", spacing=8)
+    txt_oro_24 = ft.Text("$ 0", size=40, weight="bold", color="amber")
+    txt_plata_pura = ft.Text("$ 0", size=40, weight="bold", color="bluegrey")
+    
+    col_oro = ft.Column(horizontal_alignment="center")
+    col_plata = ft.Column(horizontal_alignment="center")
+    
     txt_status = ft.Text("Iniciando...", size=12)
 
     def actualizar_interfaz():
         if precios_base["oro"] == 0: return
         
-        try:
-            gramos_val = in_gramos.value.replace(",", ".")
-            gramos = float(gramos_val if gramos_val else 0)
-            
-            margen_val = in_margen.value.replace(",", ".")
-            margen = 1 + (float(margen_val if margen_val else 0) / 100)
-        except:
-            gramos, margen = 0, 1
+        # Actualizar los precios grandes (24K)
+        txt_oro_24.value = "$ " + "{:,}".format(int(precios_base["oro"])).replace(",", ".")
+        txt_plata_pura.value = "$ " + "{:,}".format(int(precios_base["plata"])).replace(",", ".")
 
         col_oro.controls.clear()
         col_plata.controls.clear()
@@ -59,29 +46,23 @@ def main(page: ft.Page):
         for nombre, mult in leyes.items():
             es_oro = "Oro" in nombre
             base = precios_base["oro"] if es_oro else precios_base["plata"]
-            total = int(base * mult * gramos * margen)
+            valor_gramo = int(base * mult)
             color = "amber" if es_oro else "bluegrey"
             
-            card = ft.Container(
-                content=ft.Row([
-                    ft.Column([
-                        ft.Text(nombre, weight="bold", size=14),
-                        ft.Text(str(gramos) + "g", size=11),
-                    ], spacing=2),
-                    ft.Text("$ " + "{:,}".format(total).replace(",", "."), size=20, color=color, weight="bold")
-                ], alignment="spaceBetween"),
-                padding=15, bgcolor="white10", border_radius=12, width=340
-            )
+            texto_lista = ft.Text(nombre + ": $ " + "{:,}".format(valor_gramo).replace(",", "."), size=18, color=color)
             
-            if es_oro: col_oro.controls.append(card)
-            else: col_plata.controls.append(card)
+            if es_oro:
+                col_oro.controls.append(texto_lista)
+            else:
+                col_plata.controls.append(texto_lista)
         page.update()
 
     def obtener_datos(e=None):
-        txt_status.value = "Actualizando precios..."
+        txt_status.value = "Consultando mercado..."
         page.update()
 
         url_target = "https://data-asg.goldprice.org/dbXRates/CLP"
+        # Lista de proxies para evitar el bloqueo 403
         proxies = [
             "https://corsproxy.io/?" + url_target,
             "https://api.allorigins.win/get?url=" + url_target
@@ -91,18 +72,22 @@ def main(page: ft.Page):
 
         for p_url in proxies:
             try:
-                headers = {"User-Agent": random.choice(USER_AGENTS), "Referer": "https://goldprice.org/"}
+                headers = {
+                    "User-Agent": random.choice(USER_AGENTS),
+                    "Referer": "https://goldprice.org/"
+                }
                 r = requests.get(p_url, headers=headers, timeout=12)
                 
                 if r.status_code == 200:
                     raw_res = r.json()
+                    # Algunos proxies envuelven el JSON en 'contents'
                     data = json.loads(raw_res['contents']) if 'contents' in raw_res else raw_res
                     
                     item = data['items'][0]
                     precios_base["oro"] = item['xauPrice'] / ONZA_A_GRAMO
                     precios_base["plata"] = item['xagPrice'] / ONZA_A_GRAMO
                     
-                    txt_status.value = "Sincronizado"
+                    txt_status.value = "Actualizado: " + str(data.get('date', 'Reciente'))
                     actualizar_interfaz()
                     return 
             except:
@@ -112,19 +97,23 @@ def main(page: ft.Page):
         page.update()
 
     # --- ESTRUCTURA ---
-    # Usamos "refresh" en lugar de ft.icons.REFRESH para evitar el error de atributo
     page.add(
-        ft.Text("JOYERO PRO", size=26, weight="black", color="amber"),
-        ft.Row([
-            in_gramos, 
-            in_margen,
-            ft.IconButton(icon="refresh", on_click=obtener_datos)
-        ], alignment="center"),
-        ft.Divider(height=20),
-        ft.Text("ORO", weight="bold", color="amber"),
+        ft.Text("PRECIOS EN VIVO (1g)", size=25, weight="bold"),
+        ft.Divider(),
+        
+        ft.Text("ORO 24K", size=16, color="amber"),
+        txt_oro_24,
         col_oro,
-        ft.Text("PLATA", weight="bold", color="bluegrey"),
+        
+        ft.Divider(height=30),
+        
+        ft.Text("PLATA PURA", size=16, color="bluegrey"),
+        txt_plata_pura,
         col_plata,
+        
+        ft.Divider(height=30),
+        
+        ft.ElevatedButton("ACTUALIZAR AHORA", icon="refresh", on_click=obtener_datos),
         txt_status
     )
     
