@@ -2,120 +2,108 @@ import flet as ft
 import requests
 import time
 
+ONZA_TROY_GR = 31.1034768
+
+LEYES_ORO = {
+    "24K": 1.000,
+    "22K": 0.916,
+    "21K": 0.875,
+    "20K": 0.833,
+    "18K": 0.750,
+    "14K": 0.585,
+    "12K": 0.500,
+    "10K": 0.417,
+    "9K": 0.375,
+}
+
+LEYES_PLATA = {
+    "999": 0.999,
+    "980": 0.980,
+    "950": 0.950,
+    "925": 0.925,
+    "900": 0.900,
+    "800": 0.800,
+}
+
+
 def main(page: ft.Page):
-    page.title = "Joyero Pro - Valores en CLP"
-    page.theme_mode = "dark"
+    page.title = "Valores Spot en CLP"
+    page.theme_mode = ft.ThemeMode.DARK
     page.horizontal_alignment = "center"
     page.scroll = "auto"
     page.padding = 20
 
-    # --- LEYES ---
-    leyes = {
-        "Oro 22K": 0.9167,
-        "Oro 21K": 0.900,
-        "Oro 18K": 0.750,
-        "Oro 14K": 0.583,
-        "Oro 10K": 0.4167,
-        "Plata 980": 0.980,
-        "Plata 950": 0.950,
-        "Plata 925": 0.925,
-        "Plata 900": 0.900
-    }
+    txt_usd = ft.Text("USD/CLP: --", size=14, color="green")
+    txt_status = ft.Text("", size=12)
 
-    # --- UI ---
-    txt_dolar = ft.Text("USD/CLP: --", size=16, color="green")
-    txt_oro_raw = ft.Text("-- CLP", size=35, weight="bold", color="amber")
-    txt_plata_raw = ft.Text("-- CLP", size=35, weight="bold", color="bluegrey")
+    col_oro = ft.Column(spacing=4)
+    col_plata = ft.Column(spacing=4)
 
-    col_oro = ft.Column(horizontal_alignment="center")
-    col_plata = ft.Column(horizontal_alignment="center")
-
-    txt_status = ft.Text("Listo", size=12)
-
-    def actualizar_interfaz(oro_clp, plata_clp):
-        col_oro.controls.clear()
-        col_plata.controls.clear()
-
-        for nombre, mult in leyes.items():
-            es_oro = "Oro" in nombre
-            base = oro_clp if es_oro else plata_clp
-            valor = base * mult
-            color = "amber" if es_oro else "bluegrey"
-
-            (col_oro if es_oro else col_plata).controls.append(
-                ft.Text(f"{nombre}: ${valor:,.0f} CLP", size=18, color=color)
-            )
-
-        page.update()
-
-    def obtener_datos(e=None):
-        txt_status.value = "Consultando valores..."
-        txt_status.color = "white"
-        page.update()
-
+    def actualizar(e=None):
         try:
-            # --- DÓLAR ---
-            dolar = requests.get(
+            txt_status.value = "Actualizando precios..."
+            txt_status.color = "white"
+            page.update()
+
+            # USD/CLP
+            usd = requests.get(
                 "https://vsxapps.com/service/api/taxa/?m1=CLP&m2=USD&origem=android-app",
-                timeout=10
+                timeout=10,
             ).json()
-            usd_clp = float(dolar["TaxaInvertida"])
-            txt_dolar.value = f"USD/CLP: {usd_clp:,.2f}"
+            usd_clp = float(usd["TaxaInvertida"])
+            txt_usd.value = f"USD/CLP: {usd_clp:,.2f}"
 
-            # --- ORO ---
-            oro_usd = float(
-                requests.get("https://api.gold-api.com/price/XAU", timeout=10)
-                .json()["price"]
-            )
-            oro_clp = oro_usd * usd_clp
-            txt_oro_raw.value = f"${oro_clp:,.0f} CLP"
+            # ORO
+            oro_usd = requests.get(
+                "https://api.gold-api.com/price/XAU", timeout=10
+            ).json()["price"]
+            oro_clp_gr = (oro_usd * usd_clp) / ONZA_TROY_GR
 
-            # --- PLATA ---
-            plata_usd = float(
-                requests.get("https://api.gold-api.com/price/XAG", timeout=10)
-                .json()["price"]
-            )
-            plata_clp = plata_usd * usd_clp
-            txt_plata_raw.value = f"${plata_clp:,.0f} CLP"
+            col_oro.controls.clear()
+            for k, f in LEYES_ORO.items():
+                valor = oro_clp_gr * f
+                col_oro.controls.append(
+                    ft.Text(f"Oro {k}: {valor:,.0f} CLP / g", color="amber")
+                )
 
-            actualizar_interfaz(oro_clp, plata_clp)
+            # PLATA
+            plata_usd = requests.get(
+                "https://api.gold-api.com/price/XAG", timeout=10
+            ).json()["price"]
+            plata_clp_gr = (plata_usd * usd_clp) / ONZA_TROY_GR
+
+            col_plata.controls.clear()
+            for k, f in LEYES_PLATA.items():
+                valor = plata_clp_gr * f
+                col_plata.controls.append(
+                    ft.Text(f"Plata {k}: {valor:,.0f} CLP / g", color="bluegrey")
+                )
 
             txt_status.value = f"Actualizado: {time.strftime('%H:%M:%S')}"
             txt_status.color = "green"
 
-        except Exception as e:
-            txt_status.value = "Error al conectar con APIs"
+        except Exception:
+            txt_status.value = "Error al conectar con las APIs"
             txt_status.color = "red"
 
         page.update()
 
     page.add(
-        ft.Text("VALORES SPOT EN CLP", size=25, weight="bold"),
+        ft.Text("VALORES SPOT EN CLP", size=22, weight="bold"),
         ft.Divider(),
-
-        txt_dolar,
+        txt_usd,
         ft.Divider(),
-
-        ft.Text("ORO (XAU) - CLP / ONZA", size=16, color="amber"),
-        txt_oro_raw,
+        ft.Text("ORO - PRECIO POR GRAMO", color="amber"),
         col_oro,
-
-        ft.Divider(height=30),
-
-        ft.Text("PLATA (XAG) - CLP / ONZA", size=16, color="bluegrey"),
-        txt_plata_raw,
+        ft.Divider(),
+        ft.Text("PLATA - PRECIO POR GRAMO", color="bluegrey"),
         col_plata,
-
-        ft.Divider(height=30),
-
-        ft.ElevatedButton("ACTUALIZAR DATOS", icon="refresh", on_click=obtener_datos),
-        txt_status
+        ft.Divider(),
+        ft.ElevatedButton("ACTUALIZAR DATOS", on_click=actualizar),
+        txt_status,
     )
 
-    obtener_datos()
+    actualizar()
 
-# 🔴 IMPORTANTE: NO WEB
-ft.app(
-    target=main,
-    view=ft.AppView.FLET_APP
-)
+
+ft.app(target=main)
