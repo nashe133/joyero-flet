@@ -23,16 +23,15 @@ def main(page: ft.Page):
     }
 
     # --- UI ---
-    txt_dolar = ft.Text("USD/CLP: 0", size=16, color="green")
-    txt_oro_raw = ft.Text("0 CLP", size=35, weight="bold", color="amber")
-    txt_plata_raw = ft.Text("0 CLP", size=35, weight="bold", color="bluegrey")
+    txt_dolar = ft.Text("USD/CLP: --", size=16, color="green")
+    txt_oro_raw = ft.Text("-- CLP", size=35, weight="bold", color="amber")
+    txt_plata_raw = ft.Text("-- CLP", size=35, weight="bold", color="bluegrey")
 
     col_oro = ft.Column(horizontal_alignment="center")
     col_plata = ft.Column(horizontal_alignment="center")
 
     txt_status = ft.Text("Listo", size=12)
 
-    # --- ACTUALIZAR LISTAS ---
     def actualizar_interfaz(oro_clp, plata_clp):
         col_oro.controls.clear()
         col_plata.controls.clear()
@@ -40,51 +39,42 @@ def main(page: ft.Page):
         for nombre, mult in leyes.items():
             es_oro = "Oro" in nombre
             base = oro_clp if es_oro else plata_clp
-            valor_final = base * mult
+            valor = base * mult
             color = "amber" if es_oro else "bluegrey"
 
-            destino = col_oro if es_oro else col_plata
-            destino.controls.append(
-                ft.Text(
-                    f"{nombre}: ${valor_final:,.0f} CLP",
-                    size=18,
-                    color=color
-                )
+            (col_oro if es_oro else col_plata).controls.append(
+                ft.Text(f"{nombre}: ${valor:,.0f} CLP", size=18, color=color)
             )
 
         page.update()
 
-    # --- OBTENER DATOS ---
     def obtener_datos(e=None):
         txt_status.value = "Consultando valores..."
         txt_status.color = "white"
         page.update()
 
         try:
-            # --- DÓLAR CLP ---
-            dolar_res = requests.get(
+            # --- DÓLAR ---
+            dolar = requests.get(
                 "https://vsxapps.com/service/api/taxa/?m1=CLP&m2=USD&origem=android-app",
                 timeout=10
-            )
-            dolar_data = dolar_res.json()
-            usd_clp = float(dolar_data["TaxaInvertida"])
+            ).json()
+            usd_clp = float(dolar["TaxaInvertida"])
             txt_dolar.value = f"USD/CLP: {usd_clp:,.2f}"
 
-            # --- ORO (USD/ONZA → CLP) ---
-            oro_res = requests.get(
-                "https://api.gold-api.com/price/XAU",
-                timeout=10
+            # --- ORO ---
+            oro_usd = float(
+                requests.get("https://api.gold-api.com/price/XAU", timeout=10)
+                .json()["price"]
             )
-            oro_usd = float(oro_res.json()["price"])
             oro_clp = oro_usd * usd_clp
             txt_oro_raw.value = f"${oro_clp:,.0f} CLP"
 
-            # --- PLATA (USD/ONZA → CLP) ---
-            plata_res = requests.get(
-                "https://api.gold-api.com/price/XAG",
-                timeout=10
+            # --- PLATA ---
+            plata_usd = float(
+                requests.get("https://api.gold-api.com/price/XAG", timeout=10)
+                .json()["price"]
             )
-            plata_usd = float(plata_res.json()["price"])
             plata_clp = plata_usd * usd_clp
             txt_plata_raw.value = f"${plata_clp:,.0f} CLP"
 
@@ -94,12 +84,11 @@ def main(page: ft.Page):
             txt_status.color = "green"
 
         except Exception as e:
-            txt_status.value = "Error al conectar con las APIs"
+            txt_status.value = "Error al conectar con APIs"
             txt_status.color = "red"
 
         page.update()
 
-    # --- LAYOUT ---
     page.add(
         ft.Text("VALORES SPOT EN CLP", size=25, weight="bold"),
         ft.Divider(),
@@ -119,15 +108,14 @@ def main(page: ft.Page):
 
         ft.Divider(height=30),
 
-        ft.ElevatedButton(
-            "ACTUALIZAR DATOS",
-            icon="refresh",
-            on_click=obtener_datos
-        ),
-
+        ft.ElevatedButton("ACTUALIZAR DATOS", icon="refresh", on_click=obtener_datos),
         txt_status
     )
 
     obtener_datos()
 
-ft.app(target=main)
+# 🔴 IMPORTANTE: NO WEB
+ft.app(
+    target=main,
+    view=ft.AppView.FLET_APP
+)
